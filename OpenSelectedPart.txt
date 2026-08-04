@@ -1,0 +1,192 @@
+Option Explicit
+
+Sub main()
+
+    On Error GoTo SilentExit
+
+    Dim swApp As SldWorks.SldWorks
+    Dim swModel As SldWorks.ModelDoc2
+    Dim docType As Long
+
+    Set swApp = Application.SldWorks
+    Set swModel = swApp.ActiveDoc
+
+    If swModel Is Nothing Then Exit Sub
+
+    docType = swModel.GetType
+
+    Dim targetComp As SldWorks.Component2
+    Dim targetPath As String
+    Dim targetConfig As String
+
+    Select Case docType
+
+        Case swDocASSEMBLY
+            Set targetComp = GetLevelDownComponent(swModel)
+            If targetComp Is Nothing Then Exit Sub
+            targetPath = targetComp.GetPathName
+            targetConfig = targetComp.ReferencedConfiguration
+
+        Case swDocDRAWING
+            Dim compFromDrawing As SldWorks.Component2
+            Set compFromDrawing = GetComponentFromDrawingSelection(swModel)
+
+            If compFromDrawing Is Nothing Then
+                Dim refInfo As Variant
+                refInfo = GetActiveViewReference(swModel)
+                If IsEmpty(refInfo) Then Exit Sub
+                targetPath = refInfo(0)
+                targetConfig = refInfo(1)
+            Else
+                Set targetComp = ClimbToTopLevel(compFromDrawing)
+                If targetComp Is Nothing Then Exit Sub
+                targetPath = targetComp.GetPathName
+                targetConfig = targetComp.ReferencedConfiguration
+            End If
+
+        Case Else
+            Exit Sub
+    End Select
+
+    If targetPath = "" Then Exit Sub
+
+    OpenPathInConfig swApp, targetPath, targetConfig
+
+    Exit Sub
+
+SilentExit:
+    ' Любая непредвиденная ошибка - просто молча выходим, без диалогов
+    Exit Sub
+
+End Sub
+
+' ---------- вспомогательные функции ----------
+
+Private Function GetLevelDownComponent(swModel As SldWorks.ModelDoc2) As SldWorks.Component2
+
+    On Error GoTo Fail
+
+    Dim selMgr As SldWorks.SelectionMgr
+    Set selMgr = swModel.SelectionManager
+
+    If selMgr.GetSelectedObjectCount2(-1) = 0 Then Exit Function
+
+    Dim leafComp As SldWorks.Component2
+    Set leafComp = selMgr.GetSelectedObjectsComponent4(1, -1)
+
+    If leafComp Is Nothing Then Exit Function
+
+    Set GetLevelDownComponent = ClimbToTopLevel(leafComp)
+    Exit Function
+
+Fail:
+    Set GetLevelDownComponent = Nothing
+End Function
+
+Private Function ClimbToTopLevel(comp As SldWorks.Component2) As SldWorks.Component2
+
+    On Error GoTo Fail
+
+    Dim c As SldWorks.Component2
+    Set c = comp
+    Do While Not c.GetParent Is Nothing
+        Set c = c.GetParent
+    Loop
+    Set ClimbToTopLevel = c
+    Exit Function
+
+Fail:
+    Set ClimbToTopLevel = comp
+End Function
+
+Private Function GetComponentFromDrawingSelection(swModel As SldWorks.ModelDoc2) As SldWorks.Component2
+
+    On Error GoTo Fail
+
+    Dim selMgr As SldWorks.SelectionMgr
+    Set selMgr = swModel.SelectionManager
+
+    If selMgr.GetSelectedObjectCount2(-1) = 0 Then Exit Function
+
+    Dim objType As Long
+    objType = selMgr.GetSelectedObjectType3(1, -1)
+
+    If objType = swSelDRAWINGVIEWS Or objType = swSelSHEETS Then Exit Function
+
+    Dim comp As SldWorks.Component2
+    Set comp = selMgr.GetSelectedObjectsComponent4(1, -1)
+
+    Set GetComponentFromDrawingSelection = comp
+    Exit Function
+
+Fail:
+    Set GetComponentFromDrawingSelection = Nothing
+End Function
+
+Private Function GetActiveViewReference(swModel As SldWorks.ModelDoc2) As Variant
+
+    On Error GoTo Fail
+
+    Dim swDraw As SldWorks.DrawingDoc
+    Set swDraw = swModel
+
+    Dim swView As SldWorks.View
+    Set swView = swDraw.GetFirstView
+    If Not swView Is Nothing Then Set swView = swView.GetNextView
+
+    Do While Not swView Is Nothing
+        Dim refDoc As SldWorks.ModelDoc2
+        Set refDoc = swView.ReferencedDocument
+        If Not refDoc Is Nothing Then
+            Dim res(1) As Variant
+            res(0) = refDoc.GetPathName
+            res(1) = swView.ReferencedConfiguration
+            GetActiveViewReference = res
+            Exit Function
+        End If
+        Set swView = swView.GetNextView
+    Loop
+    Exit Function
+
+Fail:
+    GetActiveViewReference = Empty
+End Function
+
+Private Sub OpenPathInConfig(swApp As SldWorks.SldWorks, path As String, configName As String)
+
+    On Error GoTo Fail
+
+    Dim swExisting As SldWorks.ModelDoc2
+    Set swExisting = swApp.GetOpenDocumentByName(path)
+
+    Dim errors As Long
+    Dim swResult As SldWorks.ModelDoc2
+
+    If Not swExisting Is Nothing Then
+        swApp.ActivateDoc3 path, False, swDontRebuildActiveDoc, errors
+        Set swResult = swApp.ActiveDoc
+
+        If Not swResult Is Nothing And configName <> "" Then
+            Dim confMgr As SldWorks.ConfigurationManager
+            Set confMgr = swResult.ConfigurationManager
+            If confMgr.ActiveConfiguration Is Nothing Then
+                swResult.ShowConfiguration2 configName
+            ElseIf StrComp(confMgr.ActiveConfiguration.Name, configName, vbTextCompare) <> 0 Then
+                swResult.ShowConfiguration2 configName
+            End If
+        End If
+    Else
+        Dim docSpec As SldWorks.DocumentSpecification
+        Set docSpec = swApp.GetOpenDocSpec(path)
+        docSpec.Silent = True
+        If configName <> "" Then
+            docSpec.Configuration = configName
+        End If
+        Set swResult = swApp.OpenDoc7(docSpec)
+    End If
+
+    Exit Sub
+
+Fail:
+    Exit Sub
+End Sub
