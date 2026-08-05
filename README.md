@@ -1,5 +1,6 @@
 # SolidWorks Open Selected Part
-Открыть текущую выбранную деталь или связанную с ней сборку по одной кнопке в SolidWorks 2021 SP5.1 (и вероятно другие версии)
+Открывает текущую выбранную деталь или связанную с ней сборку по одной кнопке. Достаточно выбрать любую грань объекта.
+Макрос для SolidWorks 2021 SP5.1 (и вероятно другие версии). 
 
 Одно нажатие = один уровень вниз; повторное нажатие снова опустит на уровень ниже, так как активным документом станет уже открытая подсборка.
 
@@ -33,5 +34,10 @@
 
 ---------
 
-Open the currently selected part or its associated assembly with a single click in SolidWorks 2021 SP5.1 (and likely other versions)
+Opens the currently selected part or its associated assembly with a single click. Simply select any face of the object.
+
+Macro for SolidWorks 2021 SP5.1 (and likely other versions).
+
 One click = one level down; clicking again will move down one level again, as the currently open subassembly will become the active document.
+
+Works in drawings and 3D views. Opens the current configuration from the main assembly.
